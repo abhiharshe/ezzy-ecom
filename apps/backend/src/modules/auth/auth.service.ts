@@ -232,6 +232,132 @@ export class AuthService {
     return user;
   }
 
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user || !user.is_active || user.deleted_at) {
+      // Return generic message for security so we don't leak user existence
+      return {
+        message: 'If an account exists with this email, a password reset link has been sent.',
+      };
+    }
+
+    // Generate random 32-byte hex token
+    const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour validity
+
+    await this.prisma.passwordResetToken.create({
+      data: {
+        user_id: user.id,
+        token_hash: token,
+        expires_at: expiresAt,
+      },
+    });
+
+    return {
+      message: 'If an account exists with this email, a password reset link has been sent.',
+      dev_reset_token: token, // Returned for dev testing convenience
+      expires_at: expiresAt,
+    };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const resetRecord = await this.prisma.passwordResetToken.findUnique({
+      where: { token_hash: token },
+      include: { user: true },
+    });
+
+    if (!resetRecord || resetRecord.used_at || resetRecord.expires_at < new Date()) {
+      throw new UnauthorizedException('Invalid or expired password reset token');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(newPassword, salt);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: resetRecord.user_id },
+        data: { password_hash },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: resetRecord.id },
+        data: { used_at: new Date() },
+      }),
+    ]);
+
+    return {
+      message: 'Password has been successfully reset. You can now login with your new password.',
+    };
+  }
+
+  async updateProfile(userId: string, data: { first_name?: string; last_name?: string; phone_number?: string }) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || user.deleted_at) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (data.phone_number && data.phone_number !== user.phone_number) {
+      const existingPhone = await this.prisma.user.findUnique({
+        where: { phone_number: data.phone_number },
+      });
+      if (existingPhone) {
+        throw new ConflictException('Phone number is already associated with another account');
+      }
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        first_name: data.first_name !== undefined ? data.first_name : undefined,
+        last_name: data.last_name !== undefined ? data.last_name : undefined,
+        phone_number: data.phone_number !== undefined ? data.phone_number : undefined,
+      },
+      select: {
+        id: true,
+        email: true,
+        first_name: true,
+        last_name: true,
+        phone_number: true,
+        roles: true,
+        is_verified: true,
+      },
+    });
+
+    return updatedUser;
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || user.deleted_at) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isMatch) {
+      throw new UnauthorizedException('Current password does not match');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(newPassword, salt);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { password_hash },
+    });
+
+    return {
+      message: 'Password changed successfully',
+    };
+  }
+
   private async generateTokens(payload: JwtPayload) {
     const secret = process.env.JWT_SECRET || 'fallback-secret-for-dev-only';
     const accessToken = this.jwtService.sign(payload, {
