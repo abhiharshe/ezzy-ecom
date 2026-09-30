@@ -1,0 +1,1400 @@
+datasource db {
+  provider = "postgresql"
+  schemas  = ["auth", "vendors", "catalog", "inventory", "orders", "affiliates", "marketing", "seo", "analytics", "platform"]
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+// =============================================================================
+// SCHEMA: auth
+// Identity, user roles, sessions, and customer addresses
+// A customer can become a vendor and/or an affiliate.
+// =============================================================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  VENDOR
+  CUSTOMER
+  AFFILIATE
+
+  @@schema("auth")
+}
+
+model User {
+  id                   String               @id @default(uuid()) @db.Uuid
+  email                String               @unique
+  phone_number         String?              @unique
+  password_hash        String
+  first_name           String
+  last_name            String
+  roles                UserRole[]           @default([CUSTOMER])
+  is_verified          Boolean              @default(false)
+  is_active            Boolean              @default(true)
+  deleted_at           DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  // Sessions & Tokens
+  sessions             Session[]
+  refresh_tokens       RefreshToken[]
+  password_reset_tokens PasswordResetToken[]
+
+  // Profiles (Dual-role capabilities: a customer can be a vendor or affiliate)
+  vendor_profile       VendorProfile?
+  affiliate_profile    AffiliateProfile?
+
+  // Customer Relationships
+  addresses            UserAddress[]
+  orders               Order[]
+  reviews              ProductReview[]
+  coupon_usages        CouponUsage[]
+
+  @@index([email])
+  @@index([phone_number])
+  @@index([deleted_at])
+  @@schema("auth")
+}
+
+model UserAddress {
+  id                   String               @id @default(uuid()) @db.Uuid
+  user_id              String               @db.Uuid
+  user                 User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  label                String?              // e.g. "Home", "Work", "Warehouse"
+  recipient_name       String
+  phone_number         String
+  address_line1        String
+  address_line2        String?
+  landmark             String?
+  city                 String
+  state                String
+  postal_code          String               // Indian PIN code (6 digits)
+  country              String               @default("IN")
+  is_default_shipping  Boolean              @default(false)
+  is_default_billing   Boolean              @default(false)
+  deleted_at           DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([user_id])
+  @@index([postal_code])
+  @@index([deleted_at])
+  @@schema("auth")
+}
+
+model Session {
+  id                   String               @id @default(uuid()) @db.Uuid
+  user_id              String               @db.Uuid
+  user                 User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token_hash           String               @unique
+  ip_address           String?
+  user_agent           String?
+  expires_at           DateTime
+  created_at           DateTime             @default(now())
+
+  @@index([user_id])
+  @@index([expires_at])
+  @@schema("auth")
+}
+
+model RefreshToken {
+  id                   String               @id @default(uuid()) @db.Uuid
+  user_id              String               @db.Uuid
+  user                 User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token_hash           String               @unique
+  expires_at           DateTime
+  revoked_at           DateTime?
+  created_at           DateTime             @default(now())
+
+  @@index([user_id])
+  @@index([token_hash])
+  @@schema("auth")
+}
+
+model PasswordResetToken {
+  id                   String               @id @default(uuid()) @db.Uuid
+  user_id              String               @db.Uuid
+  user                 User                 @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  token_hash           String               @unique
+  expires_at           DateTime
+  used_at              DateTime?
+  created_at           DateTime             @default(now())
+
+  @@index([token_hash])
+  @@schema("auth")
+}
+
+// =============================================================================
+// SCHEMA: vendors
+// Vendor profiles, payout accounts, settings, settlements, and ledger
+// =============================================================================
+
+enum VendorStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+
+  @@schema("vendors")
+}
+
+enum SettlementStatus {
+  PENDING
+  PROCESSING
+  SETTLED
+  DISPUTED
+  FAILED
+
+  @@schema("vendors")
+}
+
+enum PayoutStatus {
+  INITIATED
+  PROCESSING
+  SUCCESS
+  FAILED
+  CANCELLED
+
+  @@schema("vendors")
+}
+
+enum VendorLedgerReferenceType {
+  ORDER_SALE
+  COMMISSION_DEDUCTION
+  TDS_DEDUCTION
+  TCS_DEDUCTION
+  REFUND_REVERSAL
+  PAYOUT
+  ADJUSTMENT
+
+  @@schema("vendors")
+}
+
+model VendorProfile {
+  id                      String                  @id @default(uuid()) @db.Uuid
+  user_id                 String                  @unique @db.Uuid
+  user                    User                    @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  business_name           String
+  slug                    String                  @unique
+  description             String?
+  logo_url                String?
+  banner_url              String?
+  support_email           String?
+  support_phone           String?
+  gstin                   String?                 // Indian GST identification number
+  pan_number              String?                 // Indian PAN number
+  commission_rate_percent Decimal                 @default(10.00) @db.Decimal(5, 2)
+  status                  VendorStatus            @default(PENDING)
+  is_verified             Boolean                 @default(false)
+  deleted_at              DateTime?
+  created_at              DateTime                @default(now())
+  updated_at              DateTime                @updatedAt
+
+  payout_accounts         VendorPayoutAccount[]
+  settings                VendorSettings?
+  products                Product[]
+  sub_orders              SubOrder[]
+  order_items             OrderItem[]
+  settlements             VendorSettlement[]
+  payouts                 VendorPayout[]
+  ledger_entries          VendorLedger[]
+
+  @@index([user_id])
+  @@index([status])
+  @@index([deleted_at])
+  @@schema("vendors")
+}
+
+model VendorPayoutAccount {
+  id                       String               @id @default(uuid()) @db.Uuid
+  vendor_id                String               @db.Uuid
+  vendor                   VendorProfile        @relation(fields: [vendor_id], references: [id], onDelete: Cascade)
+  account_holder_name      String
+  account_number_encrypted String
+  ifsc_code                String               // Indian Financial System Code
+  bank_name                String
+  branch_name              String?
+  upi_id                   String?              // Indian UPI ID (e.g. vendor@okaxis)
+  is_primary               Boolean              @default(true)
+  is_verified              Boolean              @default(false)
+  deleted_at               DateTime?
+  created_at               DateTime             @default(now())
+  updated_at               DateTime             @updatedAt
+
+  payouts                  VendorPayout[]
+
+  @@index([vendor_id])
+  @@index([deleted_at])
+  @@schema("vendors")
+}
+
+model VendorSettings {
+  id                       String               @id @default(uuid()) @db.Uuid
+  vendor_id                String               @unique @db.Uuid
+  vendor                   VendorProfile        @relation(fields: [vendor_id], references: [id], onDelete: Cascade)
+  auto_accept_orders       Boolean              @default(true)
+  notification_preferences Json                 @default("{}")
+  shipping_policy          String?              @db.Text
+  return_policy            String?              @db.Text
+  created_at               DateTime             @default(now())
+  updated_at               DateTime             @updatedAt
+
+  @@schema("vendors")
+}
+
+model VendorSettlement {
+  id                           String             @id @default(uuid()) @db.Uuid
+  settlement_number            String             @unique // e.g. "SETTL-2026-0001"
+  vendor_id                    String             @db.Uuid
+  vendor                       VendorProfile      @relation(fields: [vendor_id], references: [id], onDelete: Restrict)
+  period_start                 DateTime
+  period_end                   DateTime
+  gross_sales_in_paise         BigInt             // INR in Paise (1 INR = 100 Paise)
+  commission_in_paise          BigInt
+  tax_deducted_in_paise        BigInt             @default(0) // TDS (1%) + TCS (1%) under GST
+  refund_deductions_in_paise   BigInt             @default(0)
+  net_payable_in_paise         BigInt
+  status                       SettlementStatus   @default(PENDING)
+  notes                        String?
+  settled_at                   DateTime?
+  deleted_at                   DateTime?
+  created_at                   DateTime           @default(now())
+  updated_at                   DateTime           @updatedAt
+
+  payouts                      VendorPayout[]
+
+  @@index([vendor_id])
+  @@index([status])
+  @@index([period_start, period_end])
+  @@index([deleted_at])
+  @@schema("vendors")
+}
+
+model VendorPayout {
+  id                       String               @id @default(uuid()) @db.Uuid
+  payout_number            String               @unique // e.g. "PAYOUT-2026-0001"
+  vendor_id                String               @db.Uuid
+  vendor                   VendorProfile        @relation(fields: [vendor_id], references: [id], onDelete: Restrict)
+  settlement_id            String?              @db.Uuid
+  settlement               VendorSettlement?    @relation(fields: [settlement_id], references: [id], onDelete: SetNull)
+  payout_account_id        String               @db.Uuid
+  payout_account           VendorPayoutAccount  @relation(fields: [payout_account_id], references: [id], onDelete: Restrict)
+  amount_in_paise          BigInt               // INR in Paise
+  currency                 String               @default("INR")
+  status                   PayoutStatus         @default(INITIATED)
+  utr_number               String?              // Bank UTR reference number
+  payment_gateway_ref      String?              // RazorpayX / Cashfree payout ID
+  failure_reason           String?
+  processed_at             DateTime?
+  deleted_at               DateTime?
+  created_at               DateTime             @default(now())
+  updated_at               DateTime             @updatedAt
+
+  @@index([vendor_id])
+  @@index([settlement_id])
+  @@index([status])
+  @@index([deleted_at])
+  @@schema("vendors")
+}
+
+model VendorLedger {
+  id                       String                     @id @default(uuid()) @db.Uuid
+  vendor_id                String                     @db.Uuid
+  vendor                   VendorProfile              @relation(fields: [vendor_id], references: [id], onDelete: Restrict)
+  entry_type               LedgerEntryType
+  amount_in_paise          BigInt
+  balance_after_in_paise   BigInt
+  reference_type           VendorLedgerReferenceType
+  reference_id             String?                    @db.Uuid
+  description              String
+  created_at               DateTime                   @default(now())
+
+  @@index([vendor_id])
+  @@index([created_at])
+  @@schema("vendors")
+}
+
+// =============================================================================
+// SCHEMA: catalog
+// Products, variants, categories, brands, images, reviews, embeddings (pgvector)
+// =============================================================================
+
+enum ProductStatus {
+  DRAFT
+  PENDING_REVIEW
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+
+  @@schema("catalog")
+}
+
+model Category {
+  id                   String               @id @default(uuid()) @db.Uuid
+  parent_id            String?              @db.Uuid
+  parent               Category?            @relation("CategoryToParent", fields: [parent_id], references: [id], onDelete: Restrict)
+  children             Category[]           @relation("CategoryToParent")
+  name                 String
+  slug                 String               @unique
+  description          String?
+  image_url            String?
+  attribute_schema     Json                 @default("[]") // Blueprint for specs, filter types, and variant split flags
+  return_window_days   Int                  @default(7)    // Category-specific return/escrow window (7, 10, 30 days)
+  is_active            Boolean              @default(true)
+  sort_order           Int                  @default(0)
+  deleted_at           DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  products             Product[]
+  category_seo         CategorySeo?
+
+  @@index([parent_id])
+  @@index([is_active])
+  @@index([deleted_at])
+  @@schema("catalog")
+}
+
+model Brand {
+  id                   String               @id @default(uuid()) @db.Uuid
+  name                 String
+  slug                 String               @unique
+  logo_url             String?
+  description          String?
+  website_url          String?
+  is_active            Boolean              @default(true)
+  deleted_at           DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  products             Product[]
+
+  @@index([is_active])
+  @@index([deleted_at])
+  @@schema("catalog")
+}
+
+model Product {
+  id                         String               @id @default(uuid()) @db.Uuid
+  vendor_id                  String               @db.Uuid
+  vendor                     VendorProfile        @relation(fields: [vendor_id], references: [id], onDelete: Restrict)
+  category_id                String               @db.Uuid
+  category                   Category             @relation(fields: [category_id], references: [id], onDelete: Restrict)
+  brand_id                   String?              @db.Uuid
+  brand                      Brand?               @relation(fields: [brand_id], references: [id], onDelete: SetNull)
+  name                       String
+  slug                       String               @unique
+  description                String?              @db.Text
+  attributes                 Json                 @default("{}") // Specs identical across all variants (e.g. Brand, Material)
+  status                     ProductStatus        @default(DRAFT)
+  base_price_in_paise        BigInt               // Base price in INR Paise (100 Paise = ₹1)
+  compare_at_price_in_paise  BigInt?              // MRP / Strike-through price in INR Paise
+  cost_price_in_paise        BigInt?              // Cost price for vendor analysis
+  tags                       String[]             @default([])
+  is_featured                Boolean              @default(false)
+  deleted_at                 DateTime?
+  created_at                 DateTime             @default(now())
+  updated_at                 DateTime             @updatedAt
+
+  variants                   ProductVariant[]
+  images                     ProductImage[]
+  reviews                    ProductReview[]
+  product_seo                ProductSeo?
+  deal_items                 DealItem[]
+  affiliate_links            AffiliateLink[]
+
+  @@index([vendor_id])
+  @@index([category_id])
+  @@index([brand_id])
+  @@index([status])
+  @@index([is_featured])
+  @@index([deleted_at])
+  @@schema("catalog")
+}
+
+model ProductVariant {
+  id                         String               @id @default(uuid()) @db.Uuid
+  product_id                 String               @db.Uuid
+  product                    Product              @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  sku                        String               @unique
+  // JSONB storage for variable choices that define the SKU (size, color, material, etc.)
+  variant_attributes         Json                 @default("{}")
+  price_in_paise             BigInt               // Variant price in INR Paise
+  compare_at_price_in_paise  BigInt?
+  weight_in_grams            Int?
+  barcode                    String?              // EAN / UPC barcode
+  is_active                  Boolean              @default(true)
+  deleted_at                 DateTime?
+  created_at                 DateTime             @default(now())
+  updated_at                 DateTime             @updatedAt
+
+  stock_levels               StockLevel[]
+  stock_movements            StockMovement[]
+  stock_reservations         StockReservation[]
+  order_items                OrderItem[]
+  deal_items                 DealItem[]
+  images                     ProductImage[]
+
+  @@index([product_id])
+  @@index([sku])
+  @@index([is_active])
+  @@index([deleted_at])
+  @@schema("catalog")
+}
+
+model ProductImage {
+  id                   String               @id @default(uuid()) @db.Uuid
+  product_id           String               @db.Uuid
+  product              Product              @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  variant_id           String?              @db.Uuid
+  variant              ProductVariant?      @relation(fields: [variant_id], references: [id], onDelete: SetNull)
+  url                  String
+  alt_text             String?
+  sort_order           Int                  @default(0)
+  is_primary           Boolean              @default(false)
+  created_at           DateTime             @default(now())
+
+  @@index([product_id])
+  @@index([variant_id])
+  @@schema("catalog")
+}
+
+model ProductReview {
+  id                   String               @id @default(uuid()) @db.Uuid
+  product_id           String               @db.Uuid
+  product              Product              @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  user_id              String               @db.Uuid
+  user                 User                 @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  order_id             String?              @db.Uuid
+  rating               Int                  // 1 to 5 stars
+  title                String?
+  comment              String?              @db.Text
+  is_verified_purchase Boolean              @default(false)
+  is_published         Boolean              @default(true)
+  deleted_at           DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([product_id])
+  @@index([user_id])
+  @@index([rating])
+  @@index([deleted_at])
+  @@schema("catalog")
+}
+
+model ProductEmbedding {
+  id                   String                           @id @default(uuid()) @db.Uuid
+  product_id           String                           @unique @db.Uuid
+  // pgvector vector representation (1536 dimensions for OpenAI / modern embedding models)
+  embedding            Unsupported("vector(1536)")?
+  model_version        String                           @default("text-embedding-3-small")
+  updated_at           DateTime                         @updatedAt
+
+  @@schema("catalog")
+}
+
+// =============================================================================
+// SCHEMA: inventory
+// Warehouses, stock levels (variant_id + warehouse_id), movements, and reservations
+// =============================================================================
+
+enum StockMovementType {
+  INBOUND
+  OUTBOUND
+  ADJUSTMENT
+  RESERVATION_HOLD
+  RESERVATION_RELEASE
+  RETURN
+
+  @@schema("inventory")
+}
+
+enum ReservationStatus {
+  ACTIVE
+  FULFILLED
+  EXPIRED
+  CANCELLED
+
+  @@schema("inventory")
+}
+
+model Warehouse {
+  id                   String               @id @default(uuid()) @db.Uuid
+  name                 String
+  code                 String               @unique // e.g. "WH-BLR-01"
+  address              Json                 // postal_code, city, state, street
+  contact              Json                 // manager name, email, phone
+  is_active            Boolean              @default(true)
+  deleted_at           DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  stock_levels         StockLevel[]
+  stock_movements      StockMovement[]
+  stock_reservations   StockReservation[]
+  order_items          OrderItem[]
+
+  @@index([code])
+  @@index([is_active])
+  @@index([deleted_at])
+  @@schema("inventory")
+}
+
+model StockLevel {
+  id                   String               @id @default(uuid()) @db.Uuid
+  variant_id           String               @db.Uuid
+  variant              ProductVariant       @relation(fields: [variant_id], references: [id], onDelete: Cascade)
+  warehouse_id         String               @db.Uuid
+  warehouse            Warehouse            @relation(fields: [warehouse_id], references: [id], onDelete: Cascade)
+  quantity_on_hand     Int                  @default(0)
+  quantity_reserved    Int                  @default(0)
+  reorder_threshold    Int                  @default(10)
+  updated_at           DateTime             @updatedAt
+
+  @@unique([variant_id, warehouse_id])
+  @@index([variant_id])
+  @@index([warehouse_id])
+  @@schema("inventory")
+}
+
+model StockMovement {
+  id                   String               @id @default(uuid()) @db.Uuid
+  variant_id           String               @db.Uuid
+  variant              ProductVariant       @relation(fields: [variant_id], references: [id], onDelete: Restrict)
+  warehouse_id         String               @db.Uuid
+  warehouse            Warehouse            @relation(fields: [warehouse_id], references: [id], onDelete: Restrict)
+  type                 StockMovementType
+  quantity             Int                  // Positive for addition, negative for deduction
+  reference_type       String               // e.g. "ORDER", "PURCHASE_ORDER", "MANUAL_ADJUSTMENT"
+  reference_id         String?              @db.Uuid
+  notes                String?
+  created_by           String?              @db.Uuid
+  created_at           DateTime             @default(now())
+
+  @@index([variant_id])
+  @@index([warehouse_id])
+  @@index([created_at])
+  @@schema("inventory")
+}
+
+model StockReservation {
+  id                   String               @id @default(uuid()) @db.Uuid
+  variant_id           String               @db.Uuid
+  variant              ProductVariant       @relation(fields: [variant_id], references: [id], onDelete: Restrict)
+  warehouse_id         String               @db.Uuid
+  warehouse            Warehouse            @relation(fields: [warehouse_id], references: [id], onDelete: Restrict)
+  order_id             String?              @db.Uuid
+  quantity             Int
+  expires_at           DateTime
+  status               ReservationStatus    @default(ACTIVE)
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([variant_id, warehouse_id])
+  @@index([order_id])
+  @@index([expires_at])
+  @@index([status])
+  @@schema("inventory")
+}
+
+// =============================================================================
+// SCHEMA: orders
+// Orders, line items, status tracking, payments, and refunds (INR Paise)
+// =============================================================================
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURN_REQUESTED
+  RETURNED
+  REFUNDED
+
+  @@schema("orders")
+}
+
+enum OrderItemStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  RETURNED
+
+  @@schema("orders")
+}
+
+enum PaymentProvider {
+  RAZORPAY
+  CASHFREE
+  PHONEPE
+  STRIPE
+  COD
+
+  @@schema("orders")
+}
+
+enum PaymentStatus {
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  REFUNDED
+
+  @@schema("orders")
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  REJECTED
+
+  @@schema("orders")
+}
+
+model Order {
+  id                         String               @id @default(uuid()) @db.Uuid
+  order_number               String               @unique // e.g. "EZZ-2026-0001"
+  customer_id                String               @db.Uuid
+  customer                   User                 @relation(fields: [customer_id], references: [id], onDelete: Restrict)
+  status                     OrderStatus          @default(PENDING)
+  currency                   String               @default("INR")
+  subtotal_in_paise          BigInt
+  discount_in_paise          BigInt               @default(0)
+  tax_in_paise               BigInt               @default(0) // GST in Paise
+  shipping_in_paise          BigInt               @default(0)
+  total_amount_in_paise      BigInt
+  shipping_address           Json
+  billing_address            Json
+  coupon_code                String?
+  affiliate_code             String?
+  customer_notes             String?
+  metadata                   Json                 @default("{}")
+  deleted_at                 DateTime?
+  created_at                 DateTime             @default(now())
+  updated_at                 DateTime             @updatedAt
+
+  items                      OrderItem[]
+  sub_orders                 SubOrder[]
+  status_history             OrderStatusHistory[]
+  payments                   Payment[]
+  refunds                    Refund[]
+  affiliate_commissions      AffiliateCommission[]
+
+  @@index([customer_id])
+  @@index([status])
+  @@index([coupon_code])
+  @@index([affiliate_code])
+  @@index([created_at])
+  @@index([deleted_at])
+  @@schema("orders")
+}
+
+model SubOrder {
+  id                         String               @id @default(uuid()) @db.Uuid
+  sub_order_number           String               @unique // e.g. "EZZ-2026-0001-V1"
+  order_id                   String               @db.Uuid
+  order                      Order                @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  vendor_id                  String               @db.Uuid
+  vendor                     VendorProfile        @relation(fields: [vendor_id], references: [id], onDelete: Restrict)
+  status                     OrderStatus          @default(PENDING)
+  subtotal_in_paise          BigInt
+  discount_in_paise          BigInt               @default(0)
+  tax_in_paise               BigInt               @default(0)
+  shipping_in_paise          BigInt               @default(0)
+  total_amount_in_paise      BigInt
+  shipping_carrier           String?
+  tracking_number            String?
+  delivered_at               DateTime?            // Delivery timestamp starting escrow holding window
+  escrow_release_date        DateTime?            // Calculated settlement release date after return window
+  metadata                   Json                 @default("{}")
+  deleted_at                 DateTime?
+  created_at                 DateTime             @default(now())
+  updated_at                 DateTime             @updatedAt
+
+  items                      OrderItem[]
+
+  @@index([order_id])
+  @@index([vendor_id])
+  @@index([status])
+  @@index([delivered_at])
+  @@index([deleted_at])
+  @@schema("orders")
+}
+
+model OrderItem {
+  id                         String               @id @default(uuid()) @db.Uuid
+  order_id                   String               @db.Uuid
+  order                      Order                @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  sub_order_id               String?              @db.Uuid
+  sub_order                  SubOrder?            @relation(fields: [sub_order_id], references: [id], onDelete: Cascade)
+  variant_id                 String               @db.Uuid
+  variant                    ProductVariant       @relation(fields: [variant_id], references: [id], onDelete: Restrict)
+  vendor_id                  String               @db.Uuid
+  vendor                     VendorProfile        @relation(fields: [vendor_id], references: [id], onDelete: Restrict)
+  warehouse_id               String?              @db.Uuid
+  warehouse                  Warehouse?           @relation(fields: [warehouse_id], references: [id], onDelete: SetNull)
+  quantity                   Int
+  unit_price_in_paise        BigInt
+  total_price_in_paise       BigInt
+  tax_in_paise               BigInt               @default(0)
+  discount_in_paise          BigInt               @default(0)
+  status                     OrderItemStatus      @default(PENDING)
+  created_at                 DateTime             @default(now())
+  updated_at                 DateTime             @updatedAt
+
+  @@index([order_id])
+  @@index([sub_order_id])
+  @@index([variant_id])
+  @@index([vendor_id])
+  @@index([status])
+  @@schema("orders")
+}
+
+model OrderStatusHistory {
+  id                   String               @id @default(uuid()) @db.Uuid
+  order_id             String               @db.Uuid
+  order                Order                @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  from_status          OrderStatus?
+  to_status            OrderStatus
+  notes                String?
+  changed_by           String?              @db.Uuid
+  created_at           DateTime             @default(now())
+
+  @@index([order_id])
+  @@schema("orders")
+}
+
+model Payment {
+  id                     String               @id @default(uuid()) @db.Uuid
+  order_id               String               @db.Uuid
+  order                  Order                @relation(fields: [order_id], references: [id], onDelete: Restrict)
+  provider               PaymentProvider
+  transaction_reference  String?              @unique // Payment gateway order_id / payment_id
+  amount_in_paise        BigInt
+  currency               String               @default("INR")
+  status                 PaymentStatus        @default(PENDING)
+  payment_method         String?              // "UPI", "NETBANKING", "CARD", "COD"
+  gateway_response       Json?
+  created_at             DateTime             @default(now())
+  updated_at             DateTime             @updatedAt
+
+  refunds                Refund[]
+
+  @@index([order_id])
+  @@index([transaction_reference])
+  @@index([status])
+  @@schema("orders")
+}
+
+model Refund {
+  id                   String               @id @default(uuid()) @db.Uuid
+  order_id             String               @db.Uuid
+  order                Order                @relation(fields: [order_id], references: [id], onDelete: Restrict)
+  payment_id           String?              @db.Uuid
+  payment              Payment?             @relation(fields: [payment_id], references: [id], onDelete: SetNull)
+  amount_in_paise      BigInt
+  reason               String?
+  status               RefundStatus         @default(PENDING)
+  gateway_refund_id    String?              // Gateway refund tracking ID
+  metadata             Json                 @default("{}")
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([order_id])
+  @@index([payment_id])
+  @@index([status])
+  @@schema("orders")
+}
+
+// =============================================================================
+// SCHEMA: affiliates
+// Affiliate profiles, links, click tracking, multi-tier commissions, and ledger
+// =============================================================================
+
+enum AffiliateTier {
+  BRONZE
+  SILVER
+  GOLD
+  PLATINUM
+
+  @@schema("affiliates")
+}
+
+enum AffiliateStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+
+  @@schema("affiliates")
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  PAID
+  REVERSED
+  CANCELLED
+
+  @@schema("affiliates")
+}
+
+enum AffiliateLedgerReferenceType {
+  COMMISSION_EARNED
+  PAYOUT_WITHDRAWAL
+  COMMISSION_REVERSED
+  ADJUSTMENT
+
+  @@schema("affiliates")
+}
+
+model AffiliateProfile {
+  id                         String                  @id @default(uuid()) @db.Uuid
+  user_id                    String                  @unique @db.Uuid
+  user                       User                    @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  referral_code              String                  @unique
+  tier                       AffiliateTier           @default(BRONZE)
+  commission_rate_override   Decimal?                @db.Decimal(5, 2)
+  upline_affiliate_id        String?                 @db.Uuid
+  upline                     AffiliateProfile?       @relation("AffiliateUpline", fields: [upline_affiliate_id], references: [id], onDelete: SetNull)
+  downlines                  AffiliateProfile[]      @relation("AffiliateUpline")
+  status                     AffiliateStatus         @default(ACTIVE)
+  bank_payout_details        Json?                   // UPI / Bank transfer details
+  deleted_at                 DateTime?
+  created_at                 DateTime                @default(now())
+  updated_at                 DateTime                @updatedAt
+
+  links                      AffiliateLink[]
+  commissions                AffiliateCommission[]
+  ledger_entries             CommissionLedger[]
+
+  @@index([user_id])
+  @@index([referral_code])
+  @@index([status])
+  @@index([deleted_at])
+  @@schema("affiliates")
+}
+
+model AffiliateLink {
+  id                   String               @id @default(uuid()) @db.Uuid
+  affiliate_id         String               @db.Uuid
+  affiliate            AffiliateProfile     @relation(fields: [affiliate_id], references: [id], onDelete: Cascade)
+  product_id           String?              @db.Uuid
+  product              Product?             @relation(fields: [product_id], references: [id], onDelete: SetNull)
+  campaign             String?
+  slug                 String               @unique
+  destination_url      String
+  click_count          Int                  @default(0)
+  created_at           DateTime             @default(now())
+
+  clicks               AffiliateClick[]
+
+  @@index([affiliate_id])
+  @@index([product_id])
+  @@schema("affiliates")
+}
+
+model AffiliateClick {
+  id                   String               @id @default(uuid()) @db.Uuid
+  affiliate_link_id    String               @db.Uuid
+  affiliate_link       AffiliateLink        @relation(fields: [affiliate_link_id], references: [id], onDelete: Cascade)
+  session_id           String
+  ip_address           String?
+  user_agent           String?
+  referrer_url         String?
+  expires_at           DateTime
+  created_at           DateTime             @default(now())
+
+  @@index([affiliate_link_id])
+  @@index([session_id])
+  @@index([expires_at])
+  @@schema("affiliates")
+}
+
+model AffiliateCommission {
+  id                   String               @id @default(uuid()) @db.Uuid
+  affiliate_id         String               @db.Uuid
+  affiliate            AffiliateProfile     @relation(fields: [affiliate_id], references: [id], onDelete: Restrict)
+  order_id             String               @db.Uuid
+  order                Order                @relation(fields: [order_id], references: [id], onDelete: Restrict)
+  order_item_id        String?              @db.Uuid
+  tier_level           Int                  @default(1) // 1 = direct, 2 = upline tier 2
+  commission_in_paise  BigInt
+  status               CommissionStatus     @default(PENDING)
+  approved_at          DateTime?
+  paid_at              DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([affiliate_id])
+  @@index([order_id])
+  @@index([status])
+  @@schema("affiliates")
+}
+
+model CommissionLedger {
+  id                       String                        @id @default(uuid()) @db.Uuid
+  affiliate_id             String                        @db.Uuid
+  affiliate                AffiliateProfile              @relation(fields: [affiliate_id], references: [id], onDelete: Restrict)
+  commission_id            String?                       @db.Uuid
+  entry_type               LedgerEntryType
+  amount_in_paise          BigInt
+  balance_after_in_paise   BigInt
+  reference_type           AffiliateLedgerReferenceType
+  reference_id             String?                       @db.Uuid
+  description              String
+  created_at               DateTime                      @default(now())
+
+  @@index([affiliate_id])
+  @@index([created_at])
+  @@schema("affiliates")
+}
+
+// =============================================================================
+// SCHEMA: marketing
+// Promotions, coupons, deals, deal items, festive campaigns, and carousel banners
+// =============================================================================
+
+enum PromotionType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  BUY_X_GET_Y
+  FREE_SHIPPING
+
+  @@schema("marketing")
+}
+
+enum DealType {
+  TODAYS_DEAL
+  FLASH_SALE
+  CLEARANCE
+  FESTIVE_OFFER
+
+  @@schema("marketing")
+}
+
+enum BannerPlacement {
+  HOME_HERO_CAROUSEL
+  HOME_STRIP
+  CATEGORY_BANNER
+  DEALS_SECTION
+  FESTIVE_SPOTLIGHT
+
+  @@schema("marketing")
+}
+
+model Promotion {
+  id                         String               @id @default(uuid()) @db.Uuid
+  name                       String
+  type                       PromotionType
+  value_in_paise             BigInt?              // Fixed discount in INR Paise
+  value_percent              Decimal?             @db.Decimal(5, 2)
+  min_order_value_in_paise   BigInt?
+  max_discount_in_paise      BigInt?
+  conditions                 Json                 @default("{}")
+  starts_at                  DateTime
+  ends_at                    DateTime
+  usage_limit                Int?
+  usage_count                Int                  @default(0)
+  is_active                  Boolean              @default(true)
+  deleted_at                 DateTime?
+  created_at                 DateTime             @default(now())
+  updated_at                 DateTime             @updatedAt
+
+  coupons                    Coupon[]
+
+  @@index([is_active])
+  @@index([starts_at, ends_at])
+  @@index([deleted_at])
+  @@schema("marketing")
+}
+
+model Coupon {
+  id                         String               @id @default(uuid()) @db.Uuid
+  promotion_id               String               @db.Uuid
+  promotion                  Promotion            @relation(fields: [promotion_id], references: [id], onDelete: Cascade)
+  code                       String               @unique // e.g. "DIWALI50", "WELCOME10"
+  usage_limit_per_user       Int                  @default(1)
+  usage_limit_total          Int?
+  usage_count                Int                  @default(0)
+  is_active                  Boolean              @default(true)
+  deleted_at                 DateTime?
+  created_at                 DateTime             @default(now())
+  updated_at                 DateTime             @updatedAt
+
+  usages                     CouponUsage[]
+
+  @@index([code])
+  @@index([is_active])
+  @@index([deleted_at])
+  @@schema("marketing")
+}
+
+model CouponUsage {
+  id                         String               @id @default(uuid()) @db.Uuid
+  coupon_id                  String               @db.Uuid
+  coupon                     Coupon               @relation(fields: [coupon_id], references: [id], onDelete: Restrict)
+  user_id                    String               @db.Uuid
+  user                       User                 @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  order_id                   String               @unique @db.Uuid
+  discount_amount_in_paise   BigInt
+  used_at                    DateTime             @default(now())
+
+  @@unique([coupon_id, user_id, order_id])
+  @@index([coupon_id])
+  @@index([user_id])
+  @@schema("marketing")
+}
+
+model FestiveCampaign {
+  id                   String               @id @default(uuid()) @db.Uuid
+  name                 String               // e.g. "Great Indian Festival", "Diwali Dhamaka"
+  slug                 String               @unique
+  tagline              String?
+  theme_config         Json                 @default("{}") // theme colors, badges, festive assets
+  starts_at            DateTime
+  ends_at              DateTime
+  is_active            Boolean              @default(true)
+  deleted_at           DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  deals                Deal[]
+  banners              CarouselBanner[]
+
+  @@index([slug])
+  @@index([is_active])
+  @@index([starts_at, ends_at])
+  @@index([deleted_at])
+  @@schema("marketing")
+}
+
+model Deal {
+  id                   String               @id @default(uuid()) @db.Uuid
+  title                String               // e.g. "Today's Deal: Up to 50% Off", "Flash Sale"
+  slug                 String               @unique
+  type                 DealType             @default(TODAYS_DEAL)
+  badge_text           String?              // e.g. "Deal of the Day", "Limited Stock"
+  banner_image_url     String?
+  starts_at            DateTime
+  ends_at              DateTime
+  campaign_id          String?              @db.Uuid
+  campaign             FestiveCampaign?     @relation(fields: [campaign_id], references: [id], onDelete: SetNull)
+  is_active            Boolean              @default(true)
+  deleted_at           DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  deal_items           DealItem[]
+
+  @@index([type])
+  @@index([is_active])
+  @@index([starts_at, ends_at])
+  @@index([campaign_id])
+  @@index([deleted_at])
+  @@schema("marketing")
+}
+
+model DealItem {
+  id                   String               @id @default(uuid()) @db.Uuid
+  deal_id              String               @db.Uuid
+  deal                 Deal                 @relation(fields: [deal_id], references: [id], onDelete: Cascade)
+  product_id           String               @db.Uuid
+  product              Product              @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  variant_id           String?              @db.Uuid
+  variant              ProductVariant?      @relation(fields: [variant_id], references: [id], onDelete: SetNull)
+  deal_price_in_paise  BigInt               // Discounted price in INR Paise
+  discount_percentage  Int?
+  allocated_quantity   Int?
+  sold_quantity        Int                  @default(0)
+  is_active            Boolean              @default(true)
+  sort_order           Int                  @default(0)
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([deal_id])
+  @@index([product_id])
+  @@index([variant_id])
+  @@schema("marketing")
+}
+
+model CarouselBanner {
+  id                   String               @id @default(uuid()) @db.Uuid
+  campaign_id          String?              @db.Uuid
+  campaign             FestiveCampaign?     @relation(fields: [campaign_id], references: [id], onDelete: SetNull)
+  placement            BannerPlacement      @default(HOME_HERO_CAROUSEL)
+  title                String
+  subtitle             String?
+  image_url            String               // Desktop banner image
+  mobile_image_url     String?              // Mobile-optimized banner
+  target_url           String               // Deep link or landing page
+  cta_text             String?              // e.g. "Shop Now", "Explore Deals"
+  sort_order           Int                  @default(0)
+  starts_at            DateTime?
+  ends_at              DateTime?
+  is_active            Boolean              @default(true)
+  deleted_at           DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([placement])
+  @@index([is_active])
+  @@index([sort_order])
+  @@index([deleted_at])
+  @@schema("marketing")
+}
+
+// =============================================================================
+// SCHEMA: seo
+// AI-generated SEO metadata, JSON-LD schemas, and background job queue tracking
+// =============================================================================
+
+enum SeoEntityType {
+  PRODUCT
+  CATEGORY
+
+  @@schema("seo")
+}
+
+enum SeoJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+
+  @@schema("seo")
+}
+
+model ProductSeo {
+  id                   String               @id @default(uuid()) @db.Uuid
+  product_id           String               @unique @db.Uuid
+  product              Product              @relation(fields: [product_id], references: [id], onDelete: Cascade)
+  meta_title           String?              @db.VarChar(120)
+  meta_description     String?              @db.VarChar(320)
+  keywords             String[]             @default([])
+  og_title             String?
+  og_description       String?
+  og_image_url         String?
+  canonical_url        String?
+  json_ld              Json?                // Schema.org Product markup
+  generated_by_ai      Boolean              @default(false)
+  model_version        String?              // e.g. "gemini-1.5-flash"
+  generated_at         DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([product_id])
+  @@schema("seo")
+}
+
+model CategorySeo {
+  id                   String               @id @default(uuid()) @db.Uuid
+  category_id          String               @unique @db.Uuid
+  category             Category             @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  meta_title           String?              @db.VarChar(120)
+  meta_description     String?              @db.VarChar(320)
+  keywords             String[]             @default([])
+  json_ld              Json?                // Schema.org CollectionPage / ItemList
+  generated_by_ai      Boolean              @default(false)
+  generated_at         DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([category_id])
+  @@schema("seo")
+}
+
+model SeoGenerationJob {
+  id                   String               @id @default(uuid()) @db.Uuid
+  entity_type          SeoEntityType
+  entity_id            String               @db.Uuid
+  status               SeoJobStatus         @default(PENDING)
+  attempts             Int                  @default(0)
+  error_message        String?
+  qstash_message_id    String?              // QStash task message ID
+  completed_at         DateTime?
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@unique([entity_type, entity_id])
+  @@index([status])
+  @@index([created_at])
+  @@schema("seo")
+}
+
+// =============================================================================
+// SCHEMA: analytics
+// Aggregated vendor, product, platform metrics, and traffic event stream
+// =============================================================================
+
+model DailyVendorMetric {
+  id                     String               @id @default(uuid()) @db.Uuid
+  vendor_id              String               @db.Uuid
+  date                   DateTime             @db.Date
+  gross_sales_in_paise   BigInt               @default(0)
+  net_sales_in_paise     BigInt               @default(0)
+  total_orders           Int                  @default(0)
+  units_sold             Int                  @default(0)
+  returns_count          Int                  @default(0)
+  page_views             Int                  @default(0)
+  created_at             DateTime             @default(now())
+  updated_at             DateTime             @updatedAt
+
+  @@unique([vendor_id, date])
+  @@index([vendor_id])
+  @@index([date])
+  @@schema("analytics")
+}
+
+model DailyProductMetric {
+  id                     String               @id @default(uuid()) @db.Uuid
+  product_id             String               @db.Uuid
+  date                   DateTime             @db.Date
+  views                  Int                  @default(0)
+  cart_adds              Int                  @default(0)
+  purchases              Int                  @default(0)
+  revenue_in_paise       BigInt               @default(0)
+  created_at             DateTime             @default(now())
+  updated_at             DateTime             @updatedAt
+
+  @@unique([product_id, date])
+  @@index([product_id])
+  @@index([date])
+  @@schema("analytics")
+}
+
+model DailyPlatformMetric {
+  id                             String               @id @default(uuid()) @db.Uuid
+  date                           DateTime             @unique @db.Date
+  gross_merchandise_value_in_paise BigInt             @default(0) // GMV
+  net_revenue_in_paise           BigInt               @default(0)
+  total_orders                   Int                  @default(0)
+  new_customers                  Int                  @default(0)
+  active_vendors                 Int                  @default(0)
+  affiliate_commissions_in_paise BigInt               @default(0)
+  created_at                     DateTime             @default(now())
+  updated_at                     DateTime             @updatedAt
+
+  @@index([date])
+  @@schema("analytics")
+}
+
+model TrafficEvent {
+  id                   String               @id @default(uuid()) @db.Uuid
+  event_type           String               // "PAGE_VIEW", "PRODUCT_VIEW", "ADD_TO_CART", "PURCHASE"
+  user_id              String?              @db.Uuid
+  session_id           String
+  entity_type          String?              // "PRODUCT", "CATEGORY", "DEAL", "CAMPAIGN"
+  entity_id            String?              @db.Uuid
+  metadata             Json                 @default("{}")
+  ip_address           String?
+  user_agent           String?
+  created_at           DateTime             @default(now())
+
+  @@index([event_type])
+  @@index([user_id])
+  @@index([session_id])
+  @@index([entity_type, entity_id])
+  @@index([created_at])
+  @@schema("analytics")
+}
+
+// =============================================================================
+// SCHEMA: platform
+// System settings, audit logs, feature flags, and webhook event logs
+// =============================================================================
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  DEAD_LETTER
+
+  @@schema("platform")
+}
+
+enum LedgerEntryType {
+  CREDIT
+  DEBIT
+
+  @@schema("platform")
+}
+
+model SystemSetting {
+  id                   String               @id @default(uuid()) @db.Uuid
+  key                  String               @unique // e.g. "PLATFORM_COMMISSION_PERCENT", "TAX_GST_RATES"
+  value                Json
+  category             String               @default("GENERAL")
+  description          String?
+  is_public            Boolean              @default(false)
+  updated_by           String?              @db.Uuid
+  created_at           DateTime             @default(now())
+  updated_at           DateTime             @updatedAt
+
+  @@index([key])
+  @@index([category])
+  @@schema("platform")
+}
+
+model AuditLog {
+  id                   String               @id @default(uuid()) @db.Uuid
+  actor_id             String?              @db.Uuid
+  actor_type           String               // "USER", "ADMIN", "SYSTEM", "CRON"
+  action               String               // e.g. "VENDOR_APPROVED", "PRODUCT_UPDATED", "REFUND_ISSUED"
+  entity_type          String
+  entity_id            String?              @db.Uuid
+  old_values           Json?
+  new_values           Json?
+  ip_address           String?
+  user_agent           String?
+  created_at           DateTime             @default(now())
+
+  @@index([actor_id])
+  @@index([action])
+  @@index([entity_type, entity_id])
+  @@index([created_at])
+  @@schema("platform")
+}
+
+model FeatureFlag {
+  id                   String               @id @default(uuid()) @db.Uuid
+  name                 String               @unique // e.g. "SEMANTIC_SEARCH_ENABLED", "AFFILIATE_TIER_V2"
+  description          String?
+  is_enabled           Boolean              @default(false)
+  target_roles         UserRole[]           @default([])
+  rollout_percentage   Int                  @default(100)
+  updated_at           DateTime             @updatedAt
+  created_at           DateTime             @default(now())
+
+  @@index([name])
+  @@schema("platform")
+}
+
+model WebhookEventLog {
+  id                   String               @id @default(uuid()) @db.Uuid
+  event_type           String               // e.g. "order.completed", "payment.captured"
+  source               String               // "QSTASH", "RAZORPAY", "CASHFREE"
+  payload              Json
+  status               WebhookEventStatus   @default(RECEIVED)
+  attempts             Int                  @default(0)
+  error_message        String?
+  processed_at         DateTime?
+  created_at           DateTime             @default(now())
+
+  @@index([event_type])
+  @@index([source])
+  @@index([status])
+  @@index([created_at])
+  @@schema("platform")
+}
