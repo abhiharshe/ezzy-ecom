@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+
 interface Props {
   modelValue?: string | number;
   label?: string;
@@ -10,9 +12,12 @@ interface Props {
   readonly?: boolean;
   required?: boolean;
   id?: string;
+  size?: 'sm' | 'md' | 'lg';
+  labelClassName?: string;
+  className?: string;
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   modelValue: '',
   label: '',
   placeholder: '',
@@ -23,26 +28,56 @@ withDefaults(defineProps<Props>(), {
   readonly: false,
   required: false,
   id: () => `input-${Math.random().toString(36).substring(2, 9)}`,
+  size: 'md',
+  labelClassName: '',
+  className: '',
 });
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void;
   (e: 'blur', event: FocusEvent): void;
 }>();
+
+const inputHeight = computed(() => {
+  switch (props.size) {
+    case 'sm':
+      return 'h-8.5 text-xs px-3';
+    case 'md':
+      return 'h-10 text-sm px-3.5';
+    case 'lg':
+      return 'h-11.5 text-base px-4';
+    default:
+      return 'h-10 text-sm px-3.5';
+  }
+});
 </script>
 
 <template>
-  <div class="app-input-group" :class="{ 'has-error': !!error, 'is-disabled': disabled }">
-    <label v-if="label" :for="id" class="input-label">
-      {{ label }}
-      <span v-if="required" class="required-mark">*</span>
-    </label>
+  <div class="flex flex-col gap-1.5 w-full">
+    <!-- Optional Label -->
+    <div v-if="label || $slots['label-action']" class="flex items-center justify-between">
+      <label
+        v-if="label"
+        :for="id"
+        :class="['text-xs font-bold text-slate-800 flex items-center gap-1 select-none', labelClassName]"
+      >
+        {{ label }}
+        <span v-if="required" class="text-red-500 font-bold">*</span>
+      </label>
+      <slot name="label-action" />
+    </div>
 
-    <div class="input-container">
-      <span v-if="$slots.leading" class="leading-icon">
+    <!-- Input Box Container -->
+    <div class="relative flex items-center w-full">
+      <!-- Leading Icon -->
+      <div
+        v-if="$slots.leading"
+        class="absolute left-3 flex items-center pointer-events-none text-slate-400 z-10"
+      >
         <slot name="leading" />
-      </span>
+      </div>
 
+      <!-- Native Input -->
       <input
         :id="id"
         :type="type"
@@ -51,121 +86,37 @@ const emit = defineEmits<{
         :disabled="disabled"
         :readonly="readonly"
         :required="required"
-        class="input-control"
-        :class="{ 'has-leading': $slots.leading, 'has-trailing': $slots.trailing }"
+        :class="[
+          'w-full bg-white border rounded-lg font-medium text-slate-900 placeholder:text-slate-400 transition-all outline-none',
+          'focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500',
+          error
+            ? 'border-red-500 bg-red-50/20 focus:ring-red-500/20 focus:border-red-500'
+            : 'border-slate-200 hover:border-slate-300',
+          disabled ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200 select-none' : '',
+          $slots.leading ? 'pl-9.5' : '',
+          $slots.trailing ? 'pr-9.5' : '',
+          inputHeight,
+          className,
+        ]"
         @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
         @blur="emit('blur', $event)"
       />
 
-      <span v-if="$slots.trailing" class="trailing-icon">
+      <!-- Trailing Icon -->
+      <div
+        v-if="$slots.trailing"
+        class="absolute right-3 flex items-center text-slate-400"
+      >
         <slot name="trailing" />
-      </span>
+      </div>
     </div>
 
-    <p v-if="error" class="error-text">{{ error }}</p>
-    <p v-else-if="hint" class="hint-text">{{ hint }}</p>
+    <!-- Error or Hint Message -->
+    <p v-if="error" class="text-xs font-semibold text-red-600 animate-fade-in">
+      {{ error }}
+    </p>
+    <p v-else-if="hint" class="text-xs text-slate-500">
+      {{ hint }}
+    </p>
   </div>
 </template>
-
-<style scoped>
-.app-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  width: 100%;
-}
-
-.input-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-main);
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.required-mark {
-  color: var(--danger-text);
-}
-
-.input-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.input-control {
-  width: 100%;
-  height: 40px;
-  padding: 0 13px;
-  background-color: #ffffff;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
-  color: var(--text-main);
-  font-size: 13.5px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.input-control::placeholder {
-  color: var(--text-subtle);
-  font-weight: 400;
-}
-
-.input-control:focus {
-  border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
-  background-color: #ffffff;
-}
-
-.input-control.has-leading {
-  padding-left: 38px;
-}
-
-.input-control.has-trailing {
-  padding-right: 38px;
-}
-
-.leading-icon {
-  position: absolute;
-  left: 12px;
-  display: flex;
-  align-items: center;
-  color: var(--text-muted);
-  pointer-events: none;
-}
-
-.trailing-icon {
-  position: absolute;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  color: var(--text-muted);
-}
-
-.has-error .input-control {
-  border-color: var(--danger-text);
-  background-color: #fffbfa;
-}
-.has-error .input-control:focus {
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
-}
-
-.error-text {
-  font-size: 12px;
-  color: var(--danger-text);
-  font-weight: 500;
-}
-
-.hint-text {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.is-disabled .input-control {
-  background-color: var(--bg-surface-subtle);
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-</style>

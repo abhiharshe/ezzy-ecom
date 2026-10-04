@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -25,14 +26,14 @@ export class CategoriesController {
 
   @Public()
   @Get()
-  async findAll() {
-    return this.categoriesService.findAll();
+  async findAll(@Query('includeInactive') includeInactive?: string) {
+    return this.categoriesService.findAll(includeInactive === 'true');
   }
 
   @Public()
   @Get('tree')
-  async getTree() {
-    return this.categoriesService.getTree();
+  async getTree(@Query('includeInactive') includeInactive?: string) {
+    return this.categoriesService.getTree(includeInactive === 'true');
   }
 
   @Public()

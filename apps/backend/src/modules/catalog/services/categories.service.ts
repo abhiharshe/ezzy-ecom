@@ -64,16 +64,22 @@ export class CategoriesService {
     });
   }
 
-  async findAll() {
+  async findAll(includeInactive = false) {
     return this.prisma.category.findMany({
-      where: { deleted_at: null, is_active: true },
+      where: {
+        deleted_at: null,
+        ...(includeInactive ? {} : { is_active: true }),
+      },
       orderBy: { sort_order: 'asc' },
     });
   }
 
-  async getTree(): Promise<CategoryTreeNode[]> {
+  async getTree(includeInactive = false): Promise<CategoryTreeNode[]> {
     const categories = await this.prisma.category.findMany({
-      where: { deleted_at: null, is_active: true },
+      where: {
+        deleted_at: null,
+        ...(includeInactive ? {} : { is_active: true }),
+      },
       orderBy: { sort_order: 'asc' },
     });
 

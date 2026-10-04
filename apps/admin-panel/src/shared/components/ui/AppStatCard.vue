@@ -1,119 +1,50 @@
 <script setup lang="ts">
-import { computed } from 'vue';
 import AppTrendPill from './AppTrendPill.vue';
 
 interface Props {
   title: string;
   value: string | number;
-  trendValue?: string;
-  trendDirection?: 'up' | 'down' | 'neutral';
-  trendContext?: string;
-  customSubtitle?: string;
-  iconBgColor?: string;
+  subValue?: string;
+  trend?: string;
+  trendType?: 'positive' | 'negative' | 'neutral' | 'warning';
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  trendValue: '',
-  trendDirection: 'up',
-  trendContext: '',
-  customSubtitle: '',
-  iconBgColor: '#f1f5f9',
+withDefaults(defineProps<Props>(), {
+  subValue: '',
+  trend: '',
+  trendType: 'neutral',
 });
-
-const hasTrend = computed(() => !!props.trendValue);
 </script>
 
 <template>
-  <div class="stat-card">
-    <div class="stat-header">
-      <div class="icon-box" :style="{ backgroundColor: iconBgColor }">
+  <div class="bg-white border border-slate-200 rounded-xl p-4.5 flex flex-col gap-3 shadow-xs hover:border-slate-300 transition-all">
+    <!-- Header: Title & Icon -->
+    <div class="flex items-center justify-between gap-2">
+      <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">
+        {{ title }}
+      </span>
+      <div v-if="$slots.icon" class="shrink-0">
         <slot name="icon" />
       </div>
-      <span class="stat-title">{{ title }}</span>
     </div>
 
-    <div class="stat-body">
-      <span class="stat-value">{{ value }}</span>
-    </div>
+    <!-- Value Row -->
+    <div class="flex items-baseline justify-between gap-2">
+      <div class="flex items-baseline gap-2">
+        <span class="text-2xl font-extrabold text-slate-900 tracking-tight">
+          {{ value }}
+        </span>
+        <span v-if="subValue" class="text-xs font-medium text-slate-500">
+          {{ subValue }}
+        </span>
+      </div>
 
-    <div class="stat-footer">
+      <!-- Trend Pill -->
       <AppTrendPill
-        v-if="hasTrend"
-        :value="trendValue"
-        :direction="trendDirection"
-        :context="trendContext"
-        size="sm"
+        v-if="trend"
+        :value="trend"
+        :trend="trendType"
       />
-      <span v-else-if="customSubtitle" class="custom-subtitle">
-        {{ customSubtitle }}
-      </span>
-      <slot name="footer-extra" />
     </div>
   </div>
 </template>
-
-<style scoped>
-.stat-card {
-  background-color: #ffffff;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-lg);
-  padding: 18px 20px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 12px;
-  box-shadow: var(--shadow-card);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-
-.stat-card:hover {
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-}
-
-.stat-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.icon-box {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
-  color: var(--text-main);
-}
-
-.stat-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.stat-body {
-  display: flex;
-  align-items: baseline;
-}
-
-.stat-value {
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--text-main);
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-
-.stat-footer {
-  display: flex;
-  align-items: center;
-}
-
-.custom-subtitle {
-  font-size: 12px;
-  color: var(--text-subtle);
-  font-weight: 500;
-}
-</style>

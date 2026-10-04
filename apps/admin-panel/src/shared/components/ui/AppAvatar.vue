@@ -2,74 +2,89 @@
 import { computed } from 'vue';
 
 interface Props {
-  src?: string;
   name?: string;
-  size?: 'sm' | 'md' | 'lg';
+  src?: string;
+  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+  status?: 'online' | 'offline' | 'busy' | 'away' | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  name: 'Admin',
   src: '',
-  name: 'User',
   size: 'md',
+  status: null,
 });
 
 const initials = computed(() => {
-  if (!props.name) return 'U';
+  if (!props.name) return 'A';
   const parts = props.name.trim().split(/\s+/);
   if (parts.length >= 2) {
-    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
   }
-  return props.name.substring(0, 2).toUpperCase();
+  return parts[0].slice(0, 2).toUpperCase();
+});
+
+const sizeClasses = computed(() => {
+  switch (props.size) {
+    case 'xs':
+      return 'w-6 h-6 text-[10px]';
+    case 'sm':
+      return 'w-8 h-8 text-xs';
+    case 'md':
+      return 'w-9.5 h-9.5 text-xs';
+    case 'lg':
+      return 'w-12 h-12 text-sm';
+    case 'xl':
+      return 'w-16 h-16 text-lg';
+    default:
+      return 'w-9.5 h-9.5 text-xs';
+  }
+});
+
+const statusColor = computed(() => {
+  switch (props.status) {
+    case 'online':
+      return 'bg-emerald-500';
+    case 'busy':
+      return 'bg-red-500';
+    case 'away':
+      return 'bg-amber-500';
+    case 'offline':
+    default:
+      return 'bg-slate-400';
+  }
 });
 </script>
 
 <template>
-  <div class="avatar" :class="`avatar--${size}`">
-    <img v-if="src" :src="src" :alt="name" class="avatar-img" />
-    <span v-else class="avatar-fallback">{{ initials }}</span>
+  <div class="relative inline-flex shrink-0 select-none">
+    <!-- Image Avatar -->
+    <img
+      v-if="src"
+      :src="src"
+      :alt="name"
+      :class="['rounded-full object-cover border border-slate-200', sizeClasses]"
+    />
+
+    <!-- Initials Avatar -->
+    <div
+      v-else
+      :class="[
+        'rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-500 text-white font-bold flex items-center justify-center tracking-wider shadow-xs',
+        sizeClasses,
+      ]"
+    >
+      {{ initials }}
+    </div>
+
+    <!-- Status Indicator Dot -->
+    <span
+      v-if="status"
+      :class="[
+        'absolute bottom-0 right-0 rounded-full ring-2 ring-white',
+        statusColor,
+        size === 'xs' || size === 'sm' ? 'w-2 h-2' : 'w-2.5 h-2.5',
+      ]"
+    ></span>
   </div>
 </template>
-
-<style scoped>
-.avatar {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #ffffff;
-  font-weight: 700;
-  user-select: none;
-  flex-shrink: 0;
-}
-
-.avatar--sm {
-  width: 28px;
-  height: 28px;
-  font-size: 11px;
-}
-
-.avatar--md {
-  width: 34px;
-  height: 34px;
-  font-size: 12px;
-}
-
-.avatar--lg {
-  width: 48px;
-  height: 48px;
-  font-size: 16px;
-}
-
-.avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.avatar-fallback {
-  line-height: 1;
-}
-</style>

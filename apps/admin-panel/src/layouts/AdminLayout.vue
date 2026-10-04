@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '@/modules/auth/stores/auth.store';
 import AppToast from '@/shared/components/feedback/AppToast.vue';
@@ -24,6 +24,7 @@ import {
   LogOut,
   User,
   ChevronRight,
+  ChevronDown,
 } from 'lucide-vue-next';
 
 const route = useRoute();
@@ -32,6 +33,21 @@ const authStore = useAuthStore();
 
 const showUserMenu = ref(false);
 const searchQuery = ref('');
+
+// Track open state of submenus (Catalog open by default)
+const openSubmenus = ref<Record<string, boolean>>({
+  catalog: true,
+});
+
+watch(
+  () => route.path,
+  (newPath) => {
+    if (newPath.startsWith('/catalog')) {
+      openSubmenus.value['catalog'] = true;
+    }
+  },
+  { immediate: true }
+);
 
 const toggleUserMenu = () => {
   showUserMenu.value = !showUserMenu.value;
@@ -46,11 +62,25 @@ const navigateTo = (path: string) => {
   router.push(path);
 };
 
-interface NavItem {
+const toggleSubmenu = (id: string, defaultPath?: string) => {
+  openSubmenus.value[id] = !openSubmenus.value[id];
+  if (openSubmenus.value[id] && defaultPath && !route.path.startsWith(defaultPath.split('/')[1])) {
+    router.push(defaultPath);
+  }
+};
+
+interface NavSubItem {
   id: string;
   label: string;
   path: string;
+}
+
+interface NavItem {
+  id: string;
+  label: string;
+  path?: string;
   icon: any;
+  children?: NavSubItem[];
 }
 
 interface NavSection {
@@ -71,8 +101,16 @@ const navigationSections: NavSection[] = [
     title: 'COMMERCE',
     items: [
       { id: 'orders', label: 'Order Queue', path: '/orders', icon: ShoppingBag },
-      { id: 'catalog', label: 'Catalog', path: '/catalog', icon: Package },
-      { id: 'pricing', label: 'Pricing Engine', path: '/overview', icon: Tag }, // Active view in screenshot
+      {
+        id: 'catalog',
+        label: 'Catalog',
+        icon: Package,
+        children: [
+          { id: 'catalog-products', label: 'Products', path: '/catalog/products' },
+          { id: 'catalog-categories', label: 'Categories', path: '/catalog/categories' },
+        ],
+      },
+      { id: 'pricing', label: 'Pricing Engine', path: '/overview', icon: Tag },
       { id: 'customers', label: 'Customers', path: '/customers', icon: Users },
       { id: 'reviews', label: 'Reviews', path: '/reviews', icon: Star },
     ],
@@ -100,6 +138,23 @@ const isActiveRoute = (path: string) => {
   if (path === '/overview' && route.path === '/overview') return true;
   if (path !== '/overview' && route.path.startsWith(path)) return true;
   return false;
+};
+
+const isSubActive = (path: string) => {
+  if (path === '/catalog/products') {
+    return route.path.startsWith('/catalog/products') || route.path === '/catalog';
+  }
+  if (path === '/catalog/categories') {
+    return route.path.startsWith('/catalog/categories');
+  }
+  return route.path === path || route.path.startsWith(path);
+};
+
+const isParentActive = (item: NavItem) => {
+  if (item.children && item.children.length > 0) {
+    return item.children.some((child) => isSubActive(child.path));
+  }
+  return item.path ? isActiveRoute(item.path) : false;
 };
 </script>
 
@@ -148,11 +203,47 @@ const isActiveRoute = (path: string) => {
               :key="item.id"
               class="nav-item"
             >
+              <!-- Item with Children Submenu -->
+              <div v-if="item.children && item.children.length > 0" class="nav-group">
+                <button
+                  type="button"
+                  class="nav-button"
+                  :class="{ 'is-active': isParentActive(item) }"
+                  @click="toggleSubmenu(item.id, item.children[0].path)"
+                >
+                  <component :is="item.icon" class="nav-icon" />
+                  <span class="nav-label">{{ item.label }}</span>
+                  <ChevronDown
+                    class="w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0"
+                    :class="{ '-rotate-90': !openSubmenus[item.id] }"
+                  />
+                </button>
+
+                <!-- Submenu List -->
+                <div v-show="openSubmenus[item.id]" class="submenu-container">
+                  <ul class="submenu-list">
+                    <li v-for="sub in item.children" :key="sub.id" class="submenu-item">
+                      <button
+                        type="button"
+                        class="submenu-button"
+                        :class="{ 'is-active': isSubActive(sub.path) }"
+                        @click="navigateTo(sub.path)"
+                      >
+                        <span class="submenu-dot" />
+                        <span class="submenu-label">{{ sub.label }}</span>
+                      </button>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Regular Single Item -->
               <button
+                v-else
                 type="button"
                 class="nav-button"
-                :class="{ 'is-active': isActiveRoute(item.path) }"
-                @click="navigateTo(item.path)"
+                :class="{ 'is-active': isActiveRoute(item.path!) }"
+                @click="navigateTo(item.path!)"
               >
                 <component :is="item.icon" class="nav-icon" />
                 <span class="nav-label">{{ item.label }}</span>
@@ -376,6 +467,77 @@ const isActiveRoute = (path: string) => {
 }
 
 .nav-label {
+  flex: 1;
+  text-align: left;
+}
+
+/* Submenu Styling */
+.nav-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.submenu-container {
+  padding-left: 14px;
+  margin-left: 20px;
+  border-left: 1.5px solid #e2e8f0;
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
+.submenu-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.submenu-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 6px);
+  color: #64748b;
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+}
+
+.submenu-button:hover {
+  color: #0f172a;
+  background-color: #f8fafc;
+}
+
+.submenu-button.is-active {
+  color: #4f46e5;
+  font-weight: 700;
+  background-color: #eef2ff;
+}
+
+.submenu-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #cbd5e1;
+  transition: all 0.15s ease;
+}
+
+.submenu-button:hover .submenu-dot {
+  background-color: #94a3b8;
+}
+
+.submenu-button.is-active .submenu-dot {
+  background-color: #4f46e5;
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.submenu-label {
   flex: 1;
   text-align: left;
 }

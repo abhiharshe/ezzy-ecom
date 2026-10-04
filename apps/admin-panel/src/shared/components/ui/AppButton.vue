@@ -2,8 +2,8 @@
 import { computed } from 'vue';
 
 interface Props {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'subtle';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   loading?: boolean;
   disabled?: boolean;
   type?: 'button' | 'submit' | 'reset';
@@ -23,148 +23,89 @@ const emit = defineEmits<{
   (e: 'click', event: MouseEvent): void;
 }>();
 
-const classes = computed(() => {
-  return [
-    'app-btn',
-    `app-btn--${props.variant}`,
-    `app-btn--${props.size}`,
-    {
-      'app-btn--loading': props.loading,
-      'app-btn--disabled': props.disabled || props.loading,
-      'app-btn--full': props.fullWidth,
-    },
-  ];
+const variantClasses = computed(() => {
+  switch (props.variant) {
+    case 'primary':
+      return 'bg-gradient-to-r from-indigo-500 to-indigo-600 text-white shadow-xs hover:from-indigo-600 hover:to-indigo-700 hover:shadow-md active:scale-[0.99] border border-transparent';
+    case 'secondary':
+      return 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 active:bg-indigo-200 border border-indigo-100';
+    case 'outline':
+      return 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 shadow-xs active:bg-slate-100';
+    case 'ghost':
+      return 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent';
+    case 'danger':
+      return 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 active:bg-red-200';
+    case 'subtle':
+      return 'bg-slate-100 text-slate-700 hover:bg-slate-200 hover:text-slate-900 border border-transparent';
+    default:
+      return 'bg-indigo-600 text-white hover:bg-indigo-700 border border-transparent';
+  }
+});
+
+const sizeClasses = computed(() => {
+  switch (props.size) {
+    case 'xs':
+      return 'h-7 px-2.5 text-xs gap-1.5 rounded-md';
+    case 'sm':
+      return 'h-8.5 px-3 text-xs gap-2 rounded-lg';
+    case 'md':
+      return 'h-10 px-4 text-sm gap-2 rounded-lg';
+    case 'lg':
+      return 'h-11.5 px-5 text-base gap-2.5 rounded-xl';
+    default:
+      return 'h-10 px-4 text-sm gap-2 rounded-lg';
+  }
 });
 </script>
 
 <template>
   <button
     :type="type"
-    :class="classes"
     :disabled="disabled || loading"
+    :class="[
+      'inline-flex flex-row items-center justify-center font-semibold select-none transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30 whitespace-nowrap',
+      variantClasses,
+      sizeClasses,
+      fullWidth ? 'w-full' : '',
+    ]"
     @click="emit('click', $event)"
   >
-    <span v-if="loading" class="spinner" aria-hidden="true"></span>
-    <span v-if="$slots.icon && !loading" class="icon-slot">
+    <!-- Loading Spinner -->
+    <svg
+      v-if="loading"
+      class="animate-spin -ml-0.5 h-4 w-4 text-current shrink-0"
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle
+        class="opacity-25"
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        stroke-width="4"
+      ></circle>
+      <path
+        class="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      ></path>
+    </svg>
+
+    <!-- Leading Icon -->
+    <span v-if="$slots.icon && !loading" class="inline-flex shrink-0 items-center justify-center">
       <slot name="icon" />
     </span>
-    <span class="label">
+
+    <!-- Button Text / Default Slot Content -->
+    <span class="inline-flex flex-row items-center justify-center gap-1.5 shrink-0">
       <slot />
     </span>
-    <span v-if="$slots['icon-right'] && !loading" class="icon-slot-right">
+
+    <!-- Trailing Icon -->
+    <span v-if="$slots['icon-right'] && !loading" class="inline-flex shrink-0 items-center justify-center">
       <slot name="icon-right" />
     </span>
   </button>
 </template>
-
-<style scoped>
-.app-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: var(--radius-md);
-  font-weight: 600;
-  font-size: 13.5px;
-  line-height: 1;
-  white-space: nowrap;
-  user-select: none;
-  border: 1px solid transparent;
-  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.app-btn--full {
-  width: 100%;
-}
-
-/* Sizes */
-.app-btn--sm {
-  padding: 7px 12px;
-  font-size: 12.5px;
-  border-radius: var(--radius-sm);
-}
-
-.app-btn--md {
-  padding: 9px 16px;
-  font-size: 13.5px;
-}
-
-.app-btn--lg {
-  padding: 12px 20px;
-  font-size: 14.5px;
-  border-radius: var(--radius-lg);
-}
-
-/* Variants */
-.app-btn--primary {
-  background: var(--primary-gradient);
-  color: #ffffff;
-  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.2);
-}
-.app-btn--primary:hover:not(:disabled) {
-  opacity: 0.94;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
-  transform: translateY(-1px);
-}
-
-.app-btn--secondary {
-  background-color: var(--primary-50);
-  color: var(--primary-600);
-}
-.app-btn--secondary:hover:not(:disabled) {
-  background-color: var(--primary-100);
-}
-
-.app-btn--outline {
-  background-color: #ffffff;
-  border-color: var(--border-card);
-  color: var(--text-main);
-  box-shadow: var(--shadow-sm);
-}
-.app-btn--outline:hover:not(:disabled) {
-  background-color: var(--bg-surface-subtle);
-  border-color: #cbd5e1;
-}
-
-.app-btn--ghost {
-  background-color: transparent;
-  color: var(--text-muted);
-}
-.app-btn--ghost:hover:not(:disabled) {
-  background-color: var(--bg-surface-subtle);
-  color: var(--text-main);
-}
-
-.app-btn--danger {
-  background-color: var(--danger-bg);
-  color: var(--danger-text);
-  border-color: var(--danger-border);
-}
-.app-btn--danger:hover:not(:disabled) {
-  background-color: #fee2e2;
-}
-
-.app-btn--disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: currentColor;
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.icon-slot, .icon-slot-right {
-  display: inline-flex;
-  align-items: center;
-}
-</style>

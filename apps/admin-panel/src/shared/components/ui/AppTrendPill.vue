@@ -1,111 +1,42 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { ArrowUp, ArrowDown } from 'lucide-vue-next';
+import { ArrowUpRight, ArrowDownRight, Minus, AlertTriangle } from 'lucide-vue-next';
 
 interface Props {
   value: string;
-  direction?: 'up' | 'down' | 'neutral';
-  context?: string;
-  size?: 'sm' | 'md';
+  trend?: 'positive' | 'negative' | 'neutral' | 'warning';
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  direction: 'up',
-  context: '',
-  size: 'md',
+  trend: 'neutral',
 });
 
-const isUp = computed(() => props.direction === 'up');
-const isDown = computed(() => props.direction === 'down');
+const pillClasses = computed(() => {
+  switch (props.trend) {
+    case 'positive':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
+    case 'negative':
+      return 'bg-red-50 text-red-700 border-red-200/80';
+    case 'warning':
+      return 'bg-amber-50 text-amber-700 border-amber-200/80';
+    case 'neutral':
+    default:
+      return 'bg-slate-50 text-slate-600 border-slate-200';
+  }
+});
 </script>
 
 <template>
-  <div
-    class="trend-pill"
+  <span
     :class="[
-      `trend-pill--${direction}`,
-      `trend-pill--${size}`,
+      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border select-none leading-none',
+      pillClasses,
     ]"
   >
-    <span class="icon-circle" :class="`icon-circle--${direction}`">
-      <ArrowUp v-if="isUp" class="trend-icon" />
-      <ArrowDown v-else-if="isDown" class="trend-icon" />
-    </span>
-    <span class="trend-value">{{ value }}</span>
-    <span v-if="context" class="trend-context">{{ context }}</span>
-  </div>
+    <ArrowUpRight v-if="trend === 'positive'" class="w-3 h-3 stroke-[2.5]" />
+    <ArrowDownRight v-else-if="trend === 'negative'" class="w-3 h-3 stroke-[2.5]" />
+    <AlertTriangle v-else-if="trend === 'warning'" class="w-3 h-3 stroke-[2.5]" />
+    <Minus v-else class="w-3 h-3 stroke-[2.5]" />
+    <span>{{ value }}</span>
+  </span>
 </template>
-
-<style scoped>
-.trend-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  border-radius: var(--radius-full);
-  font-weight: 600;
-  line-height: 1;
-  width: fit-content;
-}
-
-.trend-pill--sm {
-  padding: 2px 7px;
-  font-size: 11px;
-}
-
-.trend-pill--md {
-  padding: 4px 9px;
-  font-size: 12px;
-}
-
-/* Up (Green) */
-.trend-pill--up {
-  background-color: #ecfdf5;
-  color: #059669;
-}
-.icon-circle--up {
-  background-color: #10b981;
-  color: #ffffff;
-}
-
-/* Down (Red) */
-.trend-pill--down {
-  background-color: #fef2f2;
-  color: #dc2626;
-}
-.icon-circle--down {
-  background-color: #ef4444;
-  color: #ffffff;
-}
-
-/* Neutral */
-.trend-pill--neutral {
-  background-color: #f1f5f9;
-  color: #64748b;
-}
-
-.icon-circle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-}
-
-.trend-icon {
-  width: 10px;
-  height: 10px;
-  stroke-width: 3;
-}
-
-.trend-value {
-  font-weight: 700;
-}
-
-.trend-context {
-  color: var(--text-muted);
-  font-weight: 500;
-  font-size: 11px;
-  margin-left: 2px;
-}
-</style>

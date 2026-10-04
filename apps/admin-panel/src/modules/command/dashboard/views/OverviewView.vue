@@ -271,16 +271,16 @@ const handlePublishChanges = () => {
   );
 };
 
-const getScopeBadgeVariant = (scope: string) => {
+const getScopeBadgeVariant = (scope: string): 'purple' | 'blue' | 'yellow' | 'coral' | 'green' | 'red' | 'neutral' => {
   switch (scope) {
     case 'Storewide':
-      return 'storewide';
+      return 'purple';
     case 'VIP':
-      return 'vip';
+      return 'yellow';
     case 'Collection':
-      return 'collection';
+      return 'blue';
     case 'Product':
-      return 'product';
+      return 'coral';
     default:
       return 'neutral';
   }
@@ -523,9 +523,8 @@ const getScopeBadgeVariant = (scope: string) => {
                     <div class="margin-wrap">
                       <span class="margin-val">{{ item.margin }}%</span>
                       <AppProgressBar
-                        :percentage="item.margin"
-                        :variant="item.margin >= 70 ? 'success' : item.margin >= 60 ? 'primary' : 'warning'"
-                        size="sm"
+                        :value="item.margin"
+                        :show-label="false"
                       />
                     </div>
                   </td>

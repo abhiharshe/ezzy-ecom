@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { authRoutes } from '@/modules/auth/auth.routes';
 import { dashboardRoutes } from '@/modules/command/dashboard/dashboard.routes';
 import { profileRoutes } from '@/modules/profile/profile.routes';
+import { catalogRoutes } from '@/modules/catalog/catalog.routes';
 import { useAuthStore } from '@/modules/auth/stores/auth.store';
 
 const routes = [
@@ -12,6 +13,7 @@ const routes = [
   ...authRoutes,
   ...dashboardRoutes,
   ...profileRoutes,
+  ...catalogRoutes,
   {
     path: '/:pathMatch(.*)*',
     redirect: '/overview',

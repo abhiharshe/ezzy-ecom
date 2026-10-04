@@ -2,81 +2,102 @@
 import { computed } from 'vue';
 
 interface Props {
-  variant?: 'purple' | 'blue' | 'yellow' | 'coral' | 'green' | 'red' | 'neutral';
-  size?: 'sm' | 'md';
+  variant?:
+    | 'purple'
+    | 'blue'
+    | 'green'
+    | 'amber'
+    | 'red'
+    | 'neutral'
+    | 'coral'
+    | 'yellow'
+    | 'cyan'
+    | 'pink';
+  size?: 'xs' | 'sm' | 'md';
+  dot?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   variant: 'neutral',
-  size: 'md',
+  size: 'sm',
+  dot: false,
 });
 
-const classes = computed(() => {
-  return ['app-badge', `app-badge--${props.variant}`, `app-badge--${props.size}`];
+const variantClasses = computed(() => {
+  switch (props.variant) {
+    case 'purple':
+      return 'bg-purple-50 text-purple-700 border-purple-200/80';
+    case 'blue':
+      return 'bg-blue-50 text-blue-700 border-blue-200/80';
+    case 'green':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200/80';
+    case 'amber':
+    case 'yellow':
+      return 'bg-amber-50 text-amber-700 border-amber-200/80';
+    case 'red':
+      return 'bg-red-50 text-red-700 border-red-200/80';
+    case 'coral':
+      return 'bg-orange-50 text-orange-700 border-orange-200/80';
+    case 'cyan':
+      return 'bg-cyan-50 text-cyan-700 border-cyan-200/80';
+    case 'pink':
+      return 'bg-pink-50 text-pink-700 border-pink-200/80';
+    case 'neutral':
+    default:
+      return 'bg-slate-100 text-slate-700 border-slate-200';
+  }
+});
+
+const dotColor = computed(() => {
+  switch (props.variant) {
+    case 'purple':
+      return 'bg-purple-500';
+    case 'blue':
+      return 'bg-blue-500';
+    case 'green':
+      return 'bg-emerald-500';
+    case 'amber':
+    case 'yellow':
+      return 'bg-amber-500';
+    case 'red':
+      return 'bg-red-500';
+    case 'coral':
+      return 'bg-orange-500';
+    case 'cyan':
+      return 'bg-cyan-500';
+    case 'pink':
+      return 'bg-pink-500';
+    default:
+      return 'bg-slate-500';
+  }
+});
+
+const sizeClasses = computed(() => {
+  switch (props.size) {
+    case 'xs':
+      return 'px-1.5 py-0.2 text-[10px] gap-1 rounded-md';
+    case 'sm':
+      return 'px-2 py-0.5 text-xs gap-1.5 rounded-md';
+    case 'md':
+      return 'px-2.5 py-1 text-xs gap-1.5 rounded-lg font-bold';
+    default:
+      return 'px-2 py-0.5 text-xs gap-1.5 rounded-md';
+  }
 });
 </script>
 
 <template>
-  <span :class="classes">
+  <span
+    :class="[
+      'inline-flex items-center font-bold tracking-tight border select-none leading-none',
+      variantClasses,
+      sizeClasses,
+    ]"
+  >
+    <span
+      v-if="dot"
+      :class="['w-1.5 h-1.5 rounded-full shrink-0', dotColor]"
+    ></span>
     <slot />
   </span>
 </template>
-
-<style scoped>
-.app-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border-radius: var(--radius-full);
-  font-weight: 600;
-  line-height: 1;
-  white-space: nowrap;
-  letter-spacing: -0.01em;
-}
-
-.app-badge--sm {
-  padding: 3px 8px;
-  font-size: 11px;
-}
-
-.app-badge--md {
-  padding: 4px 10px;
-  font-size: 11.5px;
-}
-
-/* Color Variants */
-.app-badge--purple {
-  background-color: #f3e8ff;
-  color: #7e22ce;
-}
-
-.app-badge--blue {
-  background-color: #eff6ff;
-  color: #2563eb;
-}
-
-.app-badge--yellow {
-  background-color: #fef3c7;
-  color: #d97706;
-}
-
-.app-badge--coral {
-  background-color: #ffe4e6;
-  color: #e11d48;
-}
-
-.app-badge--green {
-  background-color: #ecfdf5;
-  color: #059669;
-}
-
-.app-badge--red {
-  background-color: #fef2f2;
-  color: #dc2626;
-}
-
-.app-badge--neutral {
-  background-color: #f1f5f9;
-  color: #475569;
-}
-</style>

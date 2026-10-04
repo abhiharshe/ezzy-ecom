@@ -90,6 +90,11 @@ public/
 - `ui/` components must have zero knowledge of business/domain logic
   (no imports from `store/` or `lib/api/`)
 - Colocate a component's test file next to it
+- For **CRUD** operations alawys use a dedicated **VIEW** for it , instead of using a modal to perform CRUD operations, unless explicitly mentioned by the user.
+- For **List View** always use the **Table Component** which is already present in the shared ui library.
+- Always prefere the components present in **"src/components/ui"**, **"src/components/common"**, ***"src/shared/components/ui"**, **"src/shared/components/common"** directories, if not found then create a new component in the same directory.
+- Never use max width classes like for root containers or div elements at i
+- Buttons should always of size "md",  shall use size "sm" only when explicitly mentioned by the user. 
 
 ---
 

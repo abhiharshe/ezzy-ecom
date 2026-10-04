@@ -14,6 +14,9 @@ export const API_ENDPOINTS = {
     CATEGORY_TREE: '/categories/tree',
     PRODUCTS: '/products',
     PRODUCT_BY_SLUG: (slug: string) => `/products/${slug}`,
+    ADMIN_PRODUCTS: '/admin/products',
+    ADMIN_PRODUCT_DETAIL: (id: string) => `/admin/products/${id}`,
+    ADMIN_PRODUCT_STATUS: (id: string) => `/admin/products/${id}/status`,
   },
   ORDERS: {
     LIST: '/orders',

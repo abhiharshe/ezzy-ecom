@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { Eye, EyeOff } from 'lucide-vue-next';
+import { Eye, EyeOff, Lock } from 'lucide-vue-next';
 
 interface Props {
   modelValue?: string;
@@ -11,17 +11,19 @@ interface Props {
   disabled?: boolean;
   required?: boolean;
   id?: string;
+  size?: 'sm' | 'md' | 'lg';
 }
 
 withDefaults(defineProps<Props>(), {
   modelValue: '',
-  label: '',
+  label: 'Password',
   placeholder: '••••••••',
   error: '',
   hint: '',
   disabled: false,
   required: false,
   id: () => `pwd-${Math.random().toString(36).substring(2, 9)}`,
+  size: 'md',
 });
 
 const emit = defineEmits<{
@@ -31,22 +33,32 @@ const emit = defineEmits<{
 
 const showPassword = ref(false);
 
-const toggleShow = () => {
+const toggleVisibility = () => {
   showPassword.value = !showPassword.value;
 };
 </script>
 
 <template>
-  <div class="app-input-group" :class="{ 'has-error': !!error, 'is-disabled': disabled }">
-    <div class="label-row">
-      <label v-if="label" :for="id" class="input-label">
+  <div class="flex flex-col gap-1.5 w-full">
+    <!-- Header with optional label-action -->
+    <div class="flex items-center justify-between">
+      <label
+        v-if="label"
+        :for="id"
+        class="text-xs font-bold text-slate-800 flex items-center gap-1 select-none"
+      >
         {{ label }}
-        <span v-if="required" class="required-mark">*</span>
+        <span v-if="required" class="text-red-500 font-bold">*</span>
       </label>
       <slot name="label-action" />
     </div>
 
-    <div class="input-container">
+    <!-- Input Box -->
+    <div class="relative flex items-center w-full">
+      <div class="absolute left-3 flex items-center pointer-events-none text-slate-400">
+        <Lock class="w-4 h-4" />
+      </div>
+
       <input
         :id="id"
         :type="showPassword ? 'text' : 'password'"
@@ -54,116 +66,38 @@ const toggleShow = () => {
         :placeholder="placeholder"
         :disabled="disabled"
         :required="required"
-        class="input-control"
+        :class="[
+          'w-full bg-white border rounded-lg font-medium text-slate-900 placeholder:text-slate-400 pl-9.5 pr-10 transition-all outline-none',
+          'focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500',
+          size === 'sm' ? 'h-8.5 text-xs' : size === 'lg' ? 'h-11.5 text-base' : 'h-10 text-sm',
+          error
+            ? 'border-red-500 bg-red-50/20 focus:ring-red-500/20 focus:border-red-500'
+            : 'border-slate-200 hover:border-slate-300',
+          disabled ? 'bg-slate-50 text-slate-400 cursor-not-allowed select-none' : '',
+        ]"
         @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
         @blur="emit('blur', $event)"
       />
 
+      <!-- Show / Hide Button -->
       <button
         type="button"
-        class="toggle-btn"
-        :aria-label="showPassword ? 'Hide password' : 'Show password'"
-        @click="toggleShow"
+        tabindex="-1"
+        class="absolute right-2.5 p-1 rounded-md text-slate-400 hover:text-slate-700 transition-colors focus:outline-none"
+        :title="showPassword ? 'Hide password' : 'Show password'"
+        @click="toggleVisibility"
       >
-        <EyeOff v-if="showPassword" class="icon" />
-        <Eye v-else class="icon" />
+        <EyeOff v-if="showPassword" class="w-4 h-4" />
+        <Eye v-else class="w-4 h-4" />
       </button>
     </div>
 
-    <p v-if="error" class="error-text">{{ error }}</p>
-    <p v-else-if="hint" class="hint-text">{{ hint }}</p>
+    <!-- Error or Hint Message -->
+    <p v-if="error" class="text-xs font-semibold text-red-600 animate-fade-in">
+      {{ error }}
+    </p>
+    <p v-else-if="hint" class="text-xs text-slate-500">
+      {{ hint }}
+    </p>
   </div>
 </template>
-
-<style scoped>
-.app-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  width: 100%;
-}
-
-.label-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.input-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-main);
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-
-.required-mark {
-  color: var(--danger-text);
-}
-
-.input-container {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.input-control {
-  width: 100%;
-  height: 40px;
-  padding: 0 40px 0 13px;
-  background-color: #ffffff;
-  border: 1px solid var(--border-card);
-  border-radius: var(--radius-md);
-  color: var(--text-main);
-  font-size: 13.5px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.input-control::placeholder {
-  color: var(--text-subtle);
-}
-
-.input-control:focus {
-  border-color: var(--primary-500);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
-}
-
-.toggle-btn {
-  position: absolute;
-  right: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-}
-.toggle-btn:hover {
-  color: var(--text-main);
-  background-color: var(--bg-surface-subtle);
-}
-
-.icon {
-  width: 16px;
-  height: 16px;
-}
-
-.has-error .input-control {
-  border-color: var(--danger-text);
-  background-color: #fffbfa;
-}
-
-.error-text {
-  font-size: 12px;
-  color: var(--danger-text);
-  font-weight: 500;
-}
-
-.hint-text {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-</style>
